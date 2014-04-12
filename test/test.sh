@@ -9,11 +9,11 @@ python2 httpproxy.py > /dev/null &
 
 sleep 2
 echo "Python 2.x tests"
-python2 sockstest.py
+python2 sockstest.py -v
 
 sleep 2
 echo "Python 3.x tests"
-python3 sockstest.py
+python3 sockstest.py -v
 
 pkill python2 > /dev/null
 ./mocks shutdown
