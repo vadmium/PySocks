@@ -57,7 +57,7 @@ __version__ = "1.5.1"
 import socket
 import struct
 from errno import EOPNOTSUPP, EINVAL, EAGAIN
-from io import BytesIO, SEEK_CUR
+from io import BytesIO
 from collections import Callable
 
 PROXY_TYPE_SOCKS4 = SOCKS4 = 1
@@ -202,7 +202,7 @@ class socksocket(_BaseSocket):
     default_proxy = None
 
     def __init__(self, family=socket.AF_INET, type=socket.SOCK_STREAM, proto=0, _sock=None):
-        if type not in {socket.SOCK_STREAM, socket.SOCK_DGRAM}:
+        if type not in (socket.SOCK_STREAM, socket.SOCK_DGRAM):
             msg = "Socket type must be stream or datagram, not {!r}"
             raise ValueError(msg.format(type))
         
@@ -321,6 +321,7 @@ class socksocket(_BaseSocket):
             self.bind(("", 0))
         
         buf = BytesIO(_BaseSocket.recv(self, bufsize, flags))
+        SEEK_CUR = 1  # Python 2.6 does not have io.SEEK_CUR
         buf.seek(+2, SEEK_CUR)
         frag = buf.read(1)
         if ord(frag):
