@@ -12,6 +12,13 @@ else:
     import sockshandler
     import urllib2
 
+class HttpTest(unittest.TestCase):
+    proxy = (socks.HTTP, "127.0.0.1", 8081)
+class Socks4Test(unittest.TestCase):
+    proxy = (socks.SOCKS4, "127.0.0.1", 1080)
+class Socks5Test(unittest.TestCase):
+    proxy = (socks.SOCKS5, "127.0.0.1", 1081)
+
 def raw_HTTP_request():
     req = "GET /ip HTTP/1.1\r\n"
     req += "Host: ifconfig.me\r\n"
@@ -20,32 +27,22 @@ def raw_HTTP_request():
     req += "\r\n"
     return req.encode()
 
-class Tests(unittest.TestCase):
-    def test_socket_HTTP(self):
-        s = socks.socksocket()
-        s.set_proxy(socks.HTTP, "127.0.0.1", 8081)
-        s.connect(("ifconfig.me", 80))
-        s.sendall(raw_HTTP_request())
-        status = s.recv(2048).splitlines()[0]
-        self.assertTrue(status.startswith(b"HTTP/1.1 200"))
+def socket_test(self):
+    s = socks.socksocket()
+    s.set_proxy(*self.proxy)
+    s.connect(("ifconfig.me", 80))
+    s.sendall(raw_HTTP_request())
+    status = s.recv(2048).splitlines()[0]
+    self.assertTrue(status.startswith(b"HTTP/1.1 200"))
+class SocketHttpTest(HttpTest):
+    runTest = socket_test
+class SocketSocks4Test(Socks4Test):
+    runTest = socket_test
+class SocketSocks5Test(Socks5Test):
+    runTest = socket_test
 
-    def test_socket_SOCKS4(self):
-        s = socks.socksocket()
-        s.set_proxy(socks.SOCKS4, "127.0.0.1", 1080)
-        s.connect(("ifconfig.me", 80))
-        s.sendall(raw_HTTP_request())
-        status = s.recv(2048).splitlines()[0]
-        self.assertTrue(status.startswith(b"HTTP/1.1 200"))
-
-    def test_socket_SOCKS5(self):
-        s = socks.socksocket()
-        s.set_proxy(socks.SOCKS5, "127.0.0.1", 1081)
-        s.connect(("ifconfig.me", 80))
-        s.sendall(raw_HTTP_request())
-        status = s.recv(2048).splitlines()[0]
-        self.assertTrue(status.startswith(b"HTTP/1.1 200"))
-
-    def test_SOCKS5_connect_timeout(self):
+class Socks5ConnectTimeoutTest(unittest.TestCase):
+    def runTest(self):
         s = socks.socksocket()
         s.settimeout(0.0001)
         s.set_proxy(socks.SOCKS5, "8.8.8.8", 80)
@@ -56,10 +53,11 @@ class Tests(unittest.TestCase):
         else:
             self.fail("ProxyConnectionError not raised")
 
-    def test_SOCKS5_timeout(self):
+class Socks5TimeoutTest(Socks5Test):
+    def runTest(self):
         s = socks.socksocket()
         s.settimeout(0.0001)
-        s.set_proxy(socks.SOCKS5, "127.0.0.1", 1081)
+        s.set_proxy(*self.proxy)
         try:
             s.connect(("ifconfig.me", 4444))
         except socks.GeneralProxyError as e:
@@ -68,82 +66,71 @@ class Tests(unittest.TestCase):
             self.fail("GeneralProxyError not raised")
 
 
-    def test_socket_SOCKS5_auth(self):
+class SocketSocks5AuthTest(Socks5Test):
+    def runTest(self):
         # TODO: add support for this test. Will need a better SOCKS5 server.
         s = socks.socksocket()
-        s.set_proxy(socks.SOCKS5, "127.0.0.1", 1081,
-            username="a", password="b")
+        s.set_proxy(*self.proxy, username="a", password="b")
         s.connect(("ifconfig.me", 80))
         s.sendall(raw_HTTP_request())
         status = s.recv(2048).splitlines()[0]
         self.assertTrue(status.startswith(b"HTTP/1.1 200"))
 
-    def test_socket_HTTP_IP(self):
-        s = socks.socksocket()
-        s.set_proxy(socks.HTTP, "127.0.0.1", 8081)
-        s.connect(("133.242.129.236", 80))
-        s.sendall(raw_HTTP_request())
-        status = s.recv(2048).splitlines()[0]
-        self.assertTrue(status.startswith(b"HTTP/1.1 200"))
+def socket_ip_test(self):
+    s = socks.socksocket()
+    s.set_proxy(*self.proxy)
+    s.connect(("133.242.129.236", 80))
+    s.sendall(raw_HTTP_request())
+    status = s.recv(2048).splitlines()[0]
+    self.assertTrue(status.startswith(b"HTTP/1.1 200"))
+class SocketHttpIpTest(HttpTest):
+    runTest = socket_ip_test
+class SocketSocks4IpTest(Socks4Test):
+    runTest = socket_ip_test
+class SocketSocks5IpTest(Socks5Test):
+    runTest = socket_ip_test
 
-    def test_socket_SOCKS4_IP(self):
-        s = socks.socksocket()
-        s.set_proxy(socks.SOCKS4, "127.0.0.1", 1080)
-        s.connect(("133.242.129.236", 80))
-        s.sendall(raw_HTTP_request())
-        status = s.recv(2048).splitlines()[0]
-        self.assertTrue(status.startswith(b"HTTP/1.1 200"))
+def urllib2_test(self):
+    socks.set_default_proxy(*self.proxy)
+    socks.wrap_module(urllib2)
+    status = urllib2.urlopen("http://ifconfig.me/ip").getcode()
+    self.assertEqual(200, status)
+class Urllib2HttpTest(HttpTest):
+    runTest = urllib2_test
+class Urllib2Socks5Test(Socks5Test):
+    runTest = urllib2_test
 
-    def test_socket_SOCKS5_IP(self):
-        s = socks.socksocket()
-        s.set_proxy(socks.SOCKS5, "127.0.0.1", 1081)
-        s.connect(("133.242.129.236", 80))
-        s.sendall(raw_HTTP_request())
-        status = s.recv(2048).splitlines()[0]
-        self.assertTrue(status.startswith(b"HTTP/1.1 200"))
+def urllib2_handler_test(self):
+    # "unittest.skipIf" not available in Python 2.6
+    if PY3K:
+        self.skipTest("sockshandler not written for Python 3")
 
-    def test_urllib2_HTTP(self):
-        socks.set_default_proxy(socks.HTTP, "127.0.0.1", 8081)
-        socks.wrap_module(urllib2)
-        status = urllib2.urlopen("http://ifconfig.me/ip").getcode()
-        self.assertEqual(200, status)
+    opener = urllib2.build_opener(sockshandler.SocksiPyHandler(*self.proxy))
+    status = opener.open("http://ifconfig.me/ip").getcode()
+    self.assertEqual(200, status)
+class Urllib2HandlerHttpTest(HttpTest):
+    runTest = urllib2_handler_test
+class Urllib2HandlerSocks5Test(Socks5Test):
+    runTest = urllib2_handler_test
 
-    def test_urllib2_SOCKS5(self):
-        socks.set_default_proxy(socks.SOCKS5, "127.0.0.1", 1081)
-        socks.wrap_module(urllib2)
-        status = urllib2.urlopen("http://ifconfig.me/ip").getcode()
-        self.assertEqual(200, status)
-
-    def test_urllib2_handler_HTTP(self):
-        if PY3K:
-            self.skipTest("sockshandler not written for Python 3")
-        opener = urllib2.build_opener(sockshandler.SocksiPyHandler(socks.HTTP, "127.0.0.1", 8081))
-        status = opener.open("http://ifconfig.me/ip").getcode()
-        self.assertEqual(200, status)
-
-    def test_urllib2_handler_SOCKS5(self):
-        if PY3K:
-            self.skipTest("sockshandler not written for Python 3")
-        opener = urllib2.build_opener(sockshandler.SocksiPyHandler(socks.SOCKS5, "127.0.0.1", 1081))
-        status = opener.open("http://ifconfig.me/ip").getcode()
-        self.assertEqual(200, status)
-
-    def test_global_override_HTTP(self):
-        socks.set_default_proxy(socks.HTTP, "127.0.0.1", 8081)
+class GlobalOverrideHttpTest(HttpTest):
+    def runTest(self):
+        socks.set_default_proxy(*self.proxy)
         good = socket.socket
         socket.socket = socks.socksocket
         status = urllib2.urlopen("http://ifconfig.me/ip").getcode()
         socket.socket = good
         self.assertEqual(200, status)
 
-    def test_global_override_SOCKS5(self):
-        host = "127.0.0.1"
-        socks.set_default_proxy(socks.SOCKS5, host, 1081)
+class GlobalOverrideSocks5Test(Socks5Test):
+    def runTest(self):
+        socks.set_default_proxy(*self.proxy)
         good = socket.socket
         socket.socket = socks.socksocket
         status = urllib2.urlopen("http://ifconfig.me/ip").getcode()
         socket.socket = good
         self.assertEqual(200, status)
+        host = self.proxy[1]
         self.assertEqual(host, socks.get_default_proxy()[1].decode())
 
 
