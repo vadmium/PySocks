@@ -3,6 +3,8 @@ sys.path.append("..")
 import socks
 import socket
 import unittest
+import subprocess
+from os import getenv
 
 PY3K = sys.version_info[0] == 3
 
@@ -12,10 +14,32 @@ else:
     import sockshandler
     import urllib2
 
-class HttpTest(unittest.TestCase):
+class PythonServerTest(unittest.TestCase):
+    def setUp(self):
+        args = (getenv("PYTHON2", "python2"), self.server_script)
+        self.server = subprocess.Popen(args, stdout=subprocess.PIPE,
+            universal_newlines=True)
+        try:
+            msg = self.server.stdout.readline()
+            if not msg.startswith("Running "):
+                raise ValueError(msg)
+            self.server.stdout.close()
+        except:
+            PythonServerTest.tearDown(self)
+            raise
+    
+    def tearDown(self):
+        self.server.stdout.close()
+        self.server.terminate()
+        self.server.wait()
+
+class HttpTest(PythonServerTest):
     proxy = (socks.HTTP, "127.0.0.1", 8081)
-class Socks4Test(unittest.TestCase):
+    server_script = "httpproxy.py"
+class Socks4Test(PythonServerTest):
     proxy = (socks.SOCKS4, "127.0.0.1", 1080)
+    server_script = "socks4server.py"
+
 class Socks5Test(unittest.TestCase):
     proxy = (socks.SOCKS5, "127.0.0.1", 1081)
 
